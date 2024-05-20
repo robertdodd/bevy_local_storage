@@ -1,0 +1,16 @@
+[package]
+name = "example_crate"
+version = "0.1.0"
+edition = "2021"
+exclude = [ "/example_crate" ]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy_local_storage = { path = "../" }
+
+bevy = "0.13.2"
+web-sys = { version = "0.3", default-features = false, features = [
+    "Storage",
+    "Window",
+] }
