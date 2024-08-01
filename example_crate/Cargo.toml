@@ -9,7 +9,7 @@ exclude = [ "/example_crate" ]
 [dependencies]
 bevy_local_storage = { path = "../" }
 
-bevy = "0.13.2"
+bevy = "0.14.0"
 web-sys = { version = "0.3", default-features = false, features = [
     "Storage",
     "Window",

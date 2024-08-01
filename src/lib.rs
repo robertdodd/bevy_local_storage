@@ -1,14 +1,9 @@
-use std::{path::Path, pin::Pin, task::Poll};
+use std::path::Path;
 
-use bevy::{
-    asset::io::{
-        memory::Value, AssetReader, AssetReaderError, AssetSource, AssetSourceId, PathStream,
-        Reader,
-    },
-    prelude::*,
-    tasks::futures_lite::{ready, AsyncRead},
-    utils::BoxedFuture,
-};
+use bevy::{asset::io::*, prelude::*};
+
+mod value_reader;
+use value_reader::*;
 
 /// A plugins that registers a LocalStorage asset reader.
 ///
@@ -43,99 +38,55 @@ impl Plugin for LocalStorageAssetReaderPlugin {
     }
 }
 
-/// Struct that implements [`AsyncRead`] for a string.
-///
-/// Copied from [`bevy_asset::io::memory::DataReader`].
-struct DataReader {
-    data: Value,
-    bytes_read: usize,
-}
-
-impl DataReader {
-    fn value(&self) -> &[u8] {
-        match &self.data {
-            Value::Vec(vec) => vec,
-            Value::Static(value) => value,
-        }
-    }
-}
-
-/// Implement [`AsyncRead`] for [`DataReader`].
-///
-/// Copied from [`bevy_asset::io::memory::DataReader`].
-impl AsyncRead for DataReader {
-    fn poll_read(
-        mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<futures_io::Result<usize>> {
-        if self.bytes_read >= self.value().len() {
-            Poll::Ready(Ok(0))
-        } else {
-            let n = ready!(Pin::new(&mut &self.value()[self.bytes_read..]).poll_read(cx, buf))?;
-            self.bytes_read += n;
-            Poll::Ready(Ok(n))
-        }
-    }
-}
-
 /// A custom asset reader implementation that wraps a given asset reader implementation
 struct LocalStorageAssetReader;
 
 impl AssetReader for LocalStorageAssetReader {
-    fn read<'a>(
-        &'a self,
-        path: &'a Path,
-    ) -> BoxedFuture<'a, Result<Box<Reader<'a>>, AssetReaderError>> {
-        Box::pin(async move {
-            // Read the value from local storage.
-            // May any errors, or [`None`] values, to [`AssetReaderError::NotFound`]
-            let storage = get_local_storage();
-            let key = path.to_str().unwrap().to_string();
-            let entry = storage
-                .get_item(&key)
-                .map_err(|_| AssetReaderError::NotFound(path.to_path_buf()))?;
-            let value = entry
-                .as_ref()
-                .ok_or(AssetReaderError::NotFound(path.to_path_buf()))?;
+    async fn read<'a>(&'a self, path: &'a Path) -> Result<Box<Reader<'a>>, AssetReaderError> {
+        // Read the value from local storage.
+        // May any errors, or [`None`] values, to [`AssetReaderError::NotFound`]
+        let storage = get_local_storage();
+        let key = path.to_str().unwrap().to_string();
+        let entry = storage
+            .get_item(&key)
+            .map_err(|_| AssetReaderError::NotFound(path.to_path_buf()))?;
+        let value = entry
+            .as_ref()
+            .ok_or(AssetReaderError::NotFound(path.to_path_buf()))?;
 
-            // Return the value wrapped in [`DataReader`] so that it implements [`AsyncRead`].
-            let reader: Box<Reader> = Box::new(DataReader {
-                data: Value::from(value.as_bytes().to_vec()),
-                bytes_read: 0,
-            });
-            Ok(reader)
-        })
+        // Return the value wrapped in [`ValueReader`] so that it implements [`AsyncRead`].
+        let reader = Box::new(ValueReader {
+            value: Value::from(value.as_bytes().to_vec()),
+            bytes_read: 0,
+        });
+        Ok(reader)
     }
 
     /// Not implemented for local storage.
     ///
     /// Always raises [`AssetReaderError::NotFound`].
-    fn read_meta<'a>(
-        &'a self,
-        path: &'a Path,
-    ) -> BoxedFuture<'a, Result<Box<Reader<'a>>, AssetReaderError>> {
-        Box::pin(async move { Err(AssetReaderError::NotFound(path.to_path_buf())) })
+    async fn read_meta<'a>(&'a self, path: &'a Path) -> Result<Box<Reader<'a>>, AssetReaderError> {
+        Err(AssetReaderError::NotFound(path.to_path_buf()))
     }
 
     /// Not implemented, there are no directories in local storage.
     ///
     /// Always raises [`AssetReaderError::NotFound`].
-    fn read_directory<'a>(
+    async fn read_directory<'a>(
         &'a self,
         path: &'a Path,
-    ) -> BoxedFuture<'a, Result<Box<PathStream>, AssetReaderError>> {
-        Box::pin(async move { Err(AssetReaderError::NotFound(path.to_path_buf())) })
+    ) -> Result<Box<PathStream>, AssetReaderError> {
+        Err(AssetReaderError::NotFound(path.to_path_buf()))
     }
 
     /// Not implemented, there are no directories in local storage.
     ///
     /// Always returns [`false`].
-    fn is_directory<'a>(
+    async fn is_directory<'a>(
         &'a self,
-        _path: &'a Path,
-    ) -> BoxedFuture<'a, Result<bool, AssetReaderError>> {
-        Box::pin(async move { Ok(false) })
+        _: &'a Path,
+    ) -> std::result::Result<bool, AssetReaderError> {
+        Ok(false)
     }
 }
 
