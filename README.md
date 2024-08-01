@@ -60,6 +60,7 @@ See [web-sys::Storage](https://rustwasm.github.io/wasm-bindgen/api/web_sys/struc
 
 | `bevy_local_storage` | `bevy` |
 |:---------------------|:-------|
+| `0.2`                | `0.14` |
 | `0.1`                | `0.13` |
 
 ## License
