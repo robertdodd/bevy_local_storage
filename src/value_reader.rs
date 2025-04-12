@@ -1,8 +1,8 @@
-use std::io::SeekFrom;
 use std::{pin::Pin, sync::Arc, task::Poll};
 
+use bevy::asset::io::{AsyncSeekForward, Reader};
 use bevy::tasks::futures_lite::ready;
-use futures_io::{AsyncRead, AsyncSeek};
+use futures_io::AsyncRead;
 
 /// Stores either an allocated vec of bytes or a static array of bytes.
 ///
@@ -65,42 +65,43 @@ impl AsyncRead for ValueReader {
     }
 }
 
-impl AsyncSeek for ValueReader {
-    fn poll_seek(
+impl AsyncSeekForward for ValueReader {
+    fn poll_seek_forward(
         mut self: Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-        pos: SeekFrom,
+        _cx: &mut core::task::Context<'_>,
+        offset: u64,
     ) -> Poll<std::io::Result<u64>> {
-        let result = match pos {
-            SeekFrom::Start(offset) => offset.try_into(),
-            SeekFrom::End(offset) => self
-                .value
-                .value()
-                .len()
-                .try_into()
-                .map(|len: i64| len - offset),
-            SeekFrom::Current(offset) => self
-                .bytes_read
-                .try_into()
-                .map(|bytes_read: i64| bytes_read + offset),
-        };
+        let result = self
+            .bytes_read
+            .try_into()
+            .map(|bytes_read: u64| bytes_read + offset);
 
         if let Ok(new_pos) = result {
-            if new_pos < 0 {
-                Poll::Ready(Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "seek position is out of range",
-                )))
-            } else {
-                self.bytes_read = new_pos as _;
-
-                Poll::Ready(Ok(new_pos as _))
-            }
+            self.bytes_read = new_pos as _;
+            Poll::Ready(Ok(new_pos as _))
         } else {
             Poll::Ready(Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "seek position is out of range",
             )))
         }
+    }
+}
+
+impl Reader for ValueReader {
+    fn read_to_end<'a>(
+        &'a mut self,
+        buf: &'a mut Vec<u8>,
+    ) -> stackfuture::StackFuture<'a, std::io::Result<usize>, { super::STACK_FUTURE_SIZE }> {
+        stackfuture::StackFuture::from(async {
+            if self.bytes_read >= self.value.value().len() {
+                Ok(0)
+            } else {
+                buf.extend_from_slice(&self.value.value()[self.bytes_read..]);
+                let n = self.value.value().len() - self.bytes_read;
+                self.bytes_read = self.value.value().len();
+                Ok(n)
+            }
+        })
     }
 }

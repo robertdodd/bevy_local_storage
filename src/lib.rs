@@ -1,9 +1,26 @@
-use std::path::Path;
+use std::{
+    path::{Path, PathBuf},
+    pin::Pin,
+    task::{Context, Poll},
+};
 
-use bevy::{asset::io::*, prelude::*};
+use bevy::{asset::io::*, prelude::*, tasks::futures_lite::Stream};
 
 mod value_reader;
 use value_reader::*;
+
+// #[cfg(any(target_arch = "wasm32", target_os = "android"))]
+/// A [`PathBuf`] [`Stream`] implementation that immediately returns nothing.
+struct EmptyPathStream;
+
+// #[cfg(any(target_arch = "wasm32", target_os = "android"))]
+impl Stream for EmptyPathStream {
+    type Item = PathBuf;
+
+    fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Poll::Ready(None)
+    }
+}
 
 /// A plugins that registers a LocalStorage asset reader.
 ///
@@ -42,7 +59,8 @@ impl Plugin for LocalStorageAssetReaderPlugin {
 struct LocalStorageAssetReader;
 
 impl AssetReader for LocalStorageAssetReader {
-    async fn read<'a>(&'a self, path: &'a Path) -> Result<Box<Reader<'a>>, AssetReaderError> {
+    // async fn read<'a>(&'a self, path: &'a Path) -> Result<Box<Reader<'a>>, AssetReaderError> {
+    async fn read<'a>(&'a self, path: &'a Path) -> Result<impl Reader + 'a, AssetReaderError> {
         // Read the value from local storage.
         // May any errors, or [`None`] values, to [`AssetReaderError::NotFound`]
         let storage = get_local_storage();
@@ -55,17 +73,17 @@ impl AssetReader for LocalStorageAssetReader {
             .ok_or(AssetReaderError::NotFound(path.to_path_buf()))?;
 
         // Return the value wrapped in [`ValueReader`] so that it implements [`AsyncRead`].
-        let reader = Box::new(ValueReader {
+        let reader = ValueReader {
             value: Value::from(value.as_bytes().to_vec()),
             bytes_read: 0,
-        });
+        };
         Ok(reader)
     }
 
     /// Not implemented for local storage.
     ///
     /// Always raises [`AssetReaderError::NotFound`].
-    async fn read_meta<'a>(&'a self, path: &'a Path) -> Result<Box<Reader<'a>>, AssetReaderError> {
+    async fn read_meta<'a>(&'a self, path: &'a Path) -> Result<ValueReader, AssetReaderError> {
         Err(AssetReaderError::NotFound(path.to_path_buf()))
     }
 
@@ -74,9 +92,11 @@ impl AssetReader for LocalStorageAssetReader {
     /// Always raises [`AssetReaderError::NotFound`].
     async fn read_directory<'a>(
         &'a self,
-        path: &'a Path,
+        _path: &'a Path,
     ) -> Result<Box<PathStream>, AssetReaderError> {
-        Err(AssetReaderError::NotFound(path.to_path_buf()))
+        let stream: Box<PathStream> = Box::new(EmptyPathStream);
+        error!("Reading directories is not supported with the HttpWasmAssetReader");
+        Ok(stream)
     }
 
     /// Not implemented, there are no directories in local storage.
