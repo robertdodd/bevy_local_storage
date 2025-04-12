@@ -70,6 +70,9 @@ fn handle_keys(
             scene: asset_server.load(format!("{LOCAL_STORAGE_ASSET_ID}://{SCENE_FILENAME}")),
             ..default()
         });
+        // commands.spawn(DynamicSceneRoot(
+        //     asset_server.load(format!("{LOCAL_STORAGE_ASSET_ID}://{SCENE_FILENAME}")),
+        // ));
     } else if keys.just_pressed(KeyCode::KeyR) {
         info!("RESET PRESSED");
 

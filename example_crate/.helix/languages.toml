@@ -1,0 +1,17 @@
+[[language]]
+name = "rust"
+auto-format = true
+rulers = [120]
+
+[language-server.rust-analyzer.config.check]
+command = "clippy"
+
+# To analyze specific targets:
+# targets = ["wasm32-unknown-unknown"]
+
+# # To analyze single target:
+# allTargets = false
+# extraArgs = [
+#   "--target",
+#   "wasm32-unknown-unknown"
+# ]
