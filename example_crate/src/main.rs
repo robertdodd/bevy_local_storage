@@ -66,13 +66,9 @@ fn handle_keys(
     } else if keys.just_pressed(KeyCode::KeyL) {
         info!("LOAD PRESSED");
 
-        commands.spawn(DynamicSceneBundle {
-            scene: asset_server.load(format!("{LOCAL_STORAGE_ASSET_ID}://{SCENE_FILENAME}")),
-            ..default()
-        });
-        // commands.spawn(DynamicSceneRoot(
-        //     asset_server.load(format!("{LOCAL_STORAGE_ASSET_ID}://{SCENE_FILENAME}")),
-        // ));
+        commands.spawn(DynamicSceneRoot(
+            asset_server.load(format!("{LOCAL_STORAGE_ASSET_ID}://{SCENE_FILENAME}")),
+        ));
     } else if keys.just_pressed(KeyCode::KeyR) {
         info!("RESET PRESSED");
 
